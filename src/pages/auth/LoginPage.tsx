@@ -33,7 +33,7 @@ export function LoginPage() {
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-600 text-white">
               <MessageSquare className="h-5 w-5" />
             </div>
-            <span className="text-lg font-bold text-neutral-900 dark:text-neutral-100">GrizzlySMS</span>
+            <span className="text-lg font-bold text-neutral-900 dark:text-neutral-100">AlsancakSMS</span>
           </Link>
         </div>
 
