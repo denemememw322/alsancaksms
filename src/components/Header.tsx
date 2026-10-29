@@ -33,7 +33,7 @@ export function Header() {
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm">
               <MessageSquare className="h-5 w-5" />
             </div>
-            <span className="text-lg font-bold tracking-tight text-neutral-900 dark:text-neutral-100">AlsancakSMS</span>
+            <span className="text-lg font-bold tracking-tight text-neutral-900 dark:text-neutral-100">GrizzlySMS</span>
           </Link>
 
           <nav className="hidden items-center gap-1 md:flex">
