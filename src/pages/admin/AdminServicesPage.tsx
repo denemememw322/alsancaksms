@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { AdminLayout } from '@/components/AdminLayout';
-import type { Service, Category, Country, ServiceCountryAvailability, PricingMethod } from '@/types/database';
-import { Plus, Edit2, X, AlertCircle, Save, Archive, Globe } from 'lucide-react';
+import type { Service, Category, Country, ServiceCountryAvailability } from '@/types/database';
+import { Plus, Edit2, X, AlertCircle, Save, Globe } from 'lucide-react';
 
 interface EditState {
   id?: string;

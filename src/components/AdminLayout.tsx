@@ -10,7 +10,7 @@ export function isAdmin(roles: string[]): boolean {
 
 export function AdminLayout({ children, title }: { children: ReactNode; title: string }) {
   const { roles, profile } = useAuth();
-  const { route, navigate } = useRouter();
+  const { route } = useRouter();
   const { t } = useI18n();
 
   if (!isAdmin(roles)) {

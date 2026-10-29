@@ -105,7 +105,7 @@ export function WalletPage() {
     }
 
     setSubmitting(true);
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('deposit_requests')
       .insert({
         user_id: user!.id,

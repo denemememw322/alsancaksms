@@ -55,6 +55,7 @@ export function ServiceDetailPage() {
         return;
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase joined-row shape; TODO generate DB types
       const mapped: CatalogServiceItem[] = (sca || []).map((row: any) => ({
         availability_id: row.id,
         service_id: svc.id,
@@ -117,6 +118,7 @@ export function ServiceDetailPage() {
 
   const service = items[0];
   const IconComp = service.service_icon
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase joined-row shape; TODO generate DB types
     ? ((LucideIcons as any)[service.service_icon] as React.ComponentType<{ className?: string }>) || Package
     : Package;
   const minPrice = Math.min(...items.map((i) => i.retail_price));
