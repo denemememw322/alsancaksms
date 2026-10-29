@@ -79,7 +79,7 @@ function PlaceholderPage({ title, description }: { title: string; description: s
 }
 
 function AppRoutes() {
-  const { route, navigate } = useRouter();
+  const { route } = useRouter();
   const { roles } = useAuth();
   const path = route.path;
 

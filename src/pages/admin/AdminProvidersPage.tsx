@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { AdminLayout } from '@/components/AdminLayout';
 import { useI18n } from '@/i18n/I18nContext';
 import type { Provider, ProviderSyncJob } from '@/types/database';
-import { AlertCircle, Server, Activity, Clock, XCircle, CheckCircle } from 'lucide-react';
+import { AlertCircle, Server, Activity } from 'lucide-react';
 
 export function AdminProvidersPage() {
   const { formatDate } = useI18n();

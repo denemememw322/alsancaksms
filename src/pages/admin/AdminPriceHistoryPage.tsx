@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { AdminLayout } from '@/components/AdminLayout';
 import { useI18n } from '@/i18n/I18nContext';
-import type { PriceHistory, PriceUpdateStatus, Service, Country, Provider } from '@/types/database';
+import type { PriceHistory, PriceUpdateStatus, Service, Country } from '@/types/database';
 import { AlertCircle, Filter } from 'lucide-react';
 
 export function AdminPriceHistoryPage() {
@@ -10,24 +10,21 @@ export function AdminPriceHistoryPage() {
   const [history, setHistory] = useState<PriceHistory[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [countries, setCountries] = useState<Country[]>([]);
-  const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
   async function load() {
     setLoading(true);
-    const [ph, s, c, p] = await Promise.all([
+    const [ph, s, c] = await Promise.all([
       supabase.from('price_history').select('*').order('created_at', { ascending: false }).limit(200),
       supabase.from('services').select('id, name').order('name'),
       supabase.from('countries').select('id, name, flag_emoji').order('name'),
-      supabase.from('providers').select('id, name').order('name'),
     ]);
     if (ph.error) setError('Failed to load price history.');
     else setHistory(ph.data as PriceHistory[]);
     if (s.data) setServices(s.data as Service[]);
     if (c.data) setCountries(c.data as Country[]);
-    if (p.data) setProviders(p.data as Provider[]);
     setLoading(false);
   }
 
@@ -37,7 +34,6 @@ export function AdminPriceHistoryPage() {
 
   const svcMap = new Map(services.map((s) => [s.id, s.name]));
   const ctrMap = new Map(countries.map((c) => [c.id, c]));
-  const provMap = new Map(providers.map((p) => [p.id, p.name]));
 
   const statusColors: Record<PriceUpdateStatus, string> = {
     applied: 'badge-success',

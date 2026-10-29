@@ -54,6 +54,7 @@ export function CatalogPage() {
       setCategories(catRes.data as Category[]);
       setCountries(countryRes.data as Country[]);
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase joined-row shape; TODO generate DB types
       const mapped: CatalogServiceItem[] = (scaRes.data || []).map((row: any) => ({
         availability_id: row.id,
         service_id: row.service.id,
@@ -138,6 +139,7 @@ export function CatalogPage() {
 
   function getIcon(name: string | null): React.ComponentType<{ className?: string }> {
     if (!name) return Package;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase joined-row shape; TODO generate DB types
     const IconComp = (LucideIcons as any)[name];
     return IconComp || Package;
   }

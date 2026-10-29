@@ -17,8 +17,9 @@ interface AdminStats {
 }
 
 export function AdminOverviewPage() {
-  const { t, formatDate } = useI18n();
+  const { formatDate } = useI18n();
   const [stats, setStats] = useState<AdminStats | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase joined-row shape; TODO generate DB types
   const [recentChanges, setRecentChanges] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,13 +43,19 @@ export function AdminOverviewPage() {
 
       setStats({
         services: (svc.data || []).length,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase joined-row shape; TODO generate DB types
         activeServices: (svc.data || []).filter((s: any) => s.is_active && !s.is_archived).length,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase joined-row shape; TODO generate DB types
         countries: (ctr.data || []).filter((c: any) => c.is_active).length,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase joined-row shape; TODO generate DB types
         categories: (cat.data || []).filter((c: any) => c.is_active).length,
         providers: (prov.data || []).length,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase joined-row shape; TODO generate DB types
         activeProviders: (prov.data || []).filter((p: any) => p.is_active).length,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase joined-row shape; TODO generate DB types
         pricingRules: (rules.data || []).filter((r: any) => r.is_active).length,
         priceChanges: (ph.data || []).length,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase joined-row shape; TODO generate DB types
         flaggedChanges: (ph.data || []).filter((r: any) => r.status === 'flagged' || r.status === 'error').length,
       });
       setRecentChanges(ph.data || []);
