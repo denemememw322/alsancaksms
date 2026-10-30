@@ -5,6 +5,7 @@ import { useI18n } from '@/i18n/I18nContext';
 import type { Provider, ProviderSyncJob } from '@/types/database';
 import { AlertCircle, Server, Activity, Plus, Pencil, X } from 'lucide-react';
 import { CredentialFields, type CredentialDef } from '@/components/CredentialFields';
+import { ProviderSyncPanel } from '@/components/ProviderSyncPanel';
 import type { ProviderAuthMethod } from '@/types/database';
 
 const CREDS: Record<ProviderAuthMethod, CredentialDef[]> = {
@@ -97,7 +98,8 @@ export function AdminProvidersPage() {
               ? <CredentialFields scope="provider" ownerId={draft.id} fields={CREDS[draft.auth_method]} />
               : <p className="text-sm text-neutral-500">Save the provider first, then enter its API key here. Keys are stored encrypted on the server and never shown again.</p>}
           </div>
-          <p className="mt-4 text-xs text-neutral-500">Connection testing, balance, country/service import and number purchase are added with the provider adapter. Until then this provider is configured but not yet usable for orders.</p>
+          {draft.id && <ProviderSyncPanel providerId={draft.id} />}
+          <p className="mt-4 text-xs text-neutral-500">Number purchase and SMS retrieval for orders are added with the order system; until then this provider is used for catalog and price import only.</p>
         </div>
       )}
 
