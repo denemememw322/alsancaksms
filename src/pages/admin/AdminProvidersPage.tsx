@@ -3,7 +3,22 @@ import { supabase } from '@/lib/supabase';
 import { AdminLayout } from '@/components/AdminLayout';
 import { useI18n } from '@/i18n/I18nContext';
 import type { Provider, ProviderSyncJob } from '@/types/database';
-import { AlertCircle, Server, Activity } from 'lucide-react';
+import { AlertCircle, Server, Activity, Plus, Pencil, X } from 'lucide-react';
+import { CredentialFields, type CredentialDef } from '@/components/CredentialFields';
+import type { ProviderAuthMethod } from '@/types/database';
+
+const CREDS: Record<ProviderAuthMethod, CredentialDef[]> = {
+  api_key: [{ key: 'api_key', label: 'API key', help: 'Found in your SMS provider account under API / Profile settings.' }],
+  query_param: [{ key: 'api_key', label: 'API key (sent as query parameter)', help: 'Found in your SMS provider account under API / Profile settings.' }],
+  bearer: [{ key: 'token', label: 'Bearer token', help: 'API token issued by the provider.' }],
+  basic: [
+    { key: 'username', label: 'Username', help: 'Provider account username.' },
+    { key: 'password', label: 'Password', help: 'Provider account password.' },
+  ],
+};
+
+interface Draft { id: string | null; name: string; slug: string; base_url: string; auth_method: ProviderAuthMethod; is_active: boolean; timeout: number; rate: number; }
+const EMPTY: Draft = { id: null, name: '', slug: '', base_url: '', auth_method: 'api_key', is_active: false, timeout: 15000, rate: 60 };
 
 export function AdminProvidersPage() {
   const { formatDate } = useI18n();
@@ -11,6 +26,23 @@ export function AdminProvidersPage() {
   const [syncJobs, setSyncJobs] = useState<ProviderSyncJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  async function saveProvider() {
+    if (!draft) return;
+    setSaving(true); setFormError(null);
+    const { data, error } = await supabase.rpc('admin_save_provider', {
+      p_id: draft.id, p_name: draft.name, p_slug: draft.slug, p_base_url: draft.base_url,
+      p_auth_method: draft.auth_method, p_is_active: draft.is_active, p_timeout_ms: draft.timeout, p_rate_limit: draft.rate,
+    });
+    setSaving(false);
+    if (error) { setFormError(error.message); return; }
+    await load();
+    // keep the form open on the saved record so credentials can be entered next
+    setDraft({ ...draft, id: data as string });
+  }
 
   async function load() {
     setLoading(true);
@@ -32,6 +64,43 @@ export function AdminProvidersPage() {
     <AdminLayout title="Providers">
       {error && <div className="mb-4 flex items-center gap-2 rounded-lg bg-error-50 px-3 py-2 text-sm text-error-700 dark:bg-error-950/40 dark:text-error-400"><AlertCircle className="h-4 w-4" />{error}</div>}
 
+      <button className="btn-primary btn-sm mb-4 inline-flex items-center gap-1" onClick={() => { setDraft(EMPTY); setFormError(null); }}>
+        <Plus className="h-4 w-4" />Add SMS provider
+      </button>
+
+      {draft && (
+        <div className="card mb-6 p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="font-semibold text-neutral-900 dark:text-neutral-100">{draft.id ? 'Edit provider' : 'New SMS provider'}</h3>
+            <button className="btn-ghost btn-sm" onClick={() => setDraft(null)} aria-label="Close"><X className="h-4 w-4" /></button>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div><label className="label">Display name</label><input className="input" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></div>
+            <div><label className="label">Slug (unique id)</label><input className="input font-mono text-sm" placeholder="my-provider" value={draft.slug} onChange={(e) => setDraft({ ...draft, slug: e.target.value.toLowerCase() })} /></div>
+            <div className="sm:col-span-2"><label className="label">API base URL (https only)</label><input className="input font-mono text-sm" placeholder="https://api.example.com" value={draft.base_url} onChange={(e) => setDraft({ ...draft, base_url: e.target.value })} /></div>
+            <div><label className="label">Authentication method</label>
+              <select className="input" value={draft.auth_method} onChange={(e) => setDraft({ ...draft, auth_method: e.target.value as ProviderAuthMethod })}>
+                <option value="api_key">API key (header)</option><option value="query_param">API key (query parameter, e.g. api_key=…)</option><option value="bearer">Bearer token</option><option value="basic">Basic (username / password)</option>
+              </select></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="label">Timeout (ms)</label><input type="number" className="input" value={draft.timeout} onChange={(e) => setDraft({ ...draft, timeout: Number(e.target.value) })} /></div>
+              <div><label className="label">Requests / min</label><input type="number" className="input" value={draft.rate} onChange={(e) => setDraft({ ...draft, rate: Number(e.target.value) })} /></div>
+            </div>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draft.is_active} onChange={(e) => setDraft({ ...draft, is_active: e.target.checked })} />Active</label>
+          </div>
+          {formError && <p className="mt-3 text-sm text-error-700">{formError}</p>}
+          <button className="btn-primary btn-sm mt-4" disabled={saving || !draft.name || !draft.slug} onClick={saveProvider}>{saving ? 'Saving…' : 'Save provider'}</button>
+
+          <div className="mt-6 border-t border-neutral-200 pt-4 dark:border-neutral-800">
+            <h4 className="mb-1 text-sm font-semibold">Credentials</h4>
+            {draft.id
+              ? <CredentialFields scope="provider" ownerId={draft.id} fields={CREDS[draft.auth_method]} />
+              : <p className="text-sm text-neutral-500">Save the provider first, then enter its API key here. Keys are stored encrypted on the server and never shown again.</p>}
+          </div>
+          <p className="mt-4 text-xs text-neutral-500">Connection testing, balance, country/service import and number purchase are added with the provider adapter. Until then this provider is configured but not yet usable for orders.</p>
+        </div>
+      )}
+
       {/* Provider cards */}
       <div className="grid gap-4 sm:grid-cols-2">
         {providers.map((p) => (
@@ -46,9 +115,10 @@ export function AdminProvidersPage() {
                   <div className="text-xs font-mono text-neutral-500">{p.slug}</div>
                 </div>
               </div>
-              {p.is_active
-                ? <span className="badge-success">Connected</span>
-                : <span className="badge-neutral">Not connected</span>}
+              <div className="flex items-center gap-2">
+                {p.is_active ? <span className="badge-success">Active</span> : <span className="badge-neutral">Inactive</span>}
+                <button className="btn-ghost btn-sm" aria-label="Edit" onClick={() => { setFormError(null); setDraft({ id: p.id, name: p.name, slug: p.slug, base_url: p.base_url || '', auth_method: p.auth_method, is_active: p.is_active, timeout: p.request_timeout_ms, rate: p.rate_limit_per_min }); }}><Pencil className="h-4 w-4" /></button>
+              </div>
             </div>
 
             <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">

@@ -18,6 +18,7 @@ import { AdminProvidersPage } from '@/pages/admin/AdminProvidersPage';
 import { AdminPricingRulesPage } from '@/pages/admin/AdminPricingRulesPage';
 import { AdminPriceHistoryPage } from '@/pages/admin/AdminPriceHistoryPage';
 import { AdminWalletPage } from '@/pages/admin/AdminWalletPage';
+import { AdminPaymentGatewaysPage } from '@/pages/admin/AdminPaymentGatewaysPage';
 import { WalletPage } from '@/pages/WalletPage';
 import { isAdmin } from '@/components/AdminLayout';
 import { MessageSquare } from 'lucide-react';
@@ -116,6 +117,7 @@ function AppRoutes() {
     if (path === '/admin/pricing-rules') return <AdminRoute><AdminPricingRulesPage /></AdminRoute>;
     if (path === '/admin/price-history') return <AdminRoute><AdminPriceHistoryPage /></AdminRoute>;
     if (path === '/admin/wallet') return <AdminRoute><AdminWalletPage /></AdminRoute>;
+    if (path === '/admin/payment-gateways') return <AdminRoute><AdminPaymentGatewaysPage /></AdminRoute>;
   }
 
   const placeholders: Record<string, { title: string; description: string }> = {

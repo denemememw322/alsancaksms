@@ -1,7 +1,7 @@
 import { useAuth } from '@/context/AuthContext';
 import { Link, useRouter } from '@/context/RouterContext';
 import { useI18n } from '@/i18n/I18nContext';
-import { Shield, LayoutGrid, Package, Globe, Layers, DollarSign, History, Server, ArrowLeft, Wallet } from 'lucide-react';
+import { Shield, LayoutGrid, Package, Globe, Layers, DollarSign, History, Server, ArrowLeft, Wallet, CreditCard } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 export function isAdmin(roles: string[]): boolean {
@@ -37,6 +37,7 @@ export function AdminLayout({ children, title }: { children: ReactNode; title: s
     { label: t('admin.pricing_rules'), path: '/admin/pricing-rules', icon: DollarSign },
     { label: t('admin.price_history'), path: '/admin/price-history', icon: History },
     { label: 'Wallet & Deposits', path: '/admin/wallet', icon: Wallet },
+    { label: 'Payment Gateways', path: '/admin/payment-gateways', icon: CreditCard },
   ];
 
   const isActive = (path: string) => route.path === path;
