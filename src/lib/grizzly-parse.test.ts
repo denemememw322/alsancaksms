@@ -19,3 +19,15 @@ describe('parseTiers (provider price tiers)', () => {
     expect(parseTiers('NO_NUMBERS', '1', 'wa')).toEqual([]);
   });
 });
+
+describe('parseTiers (format tolerance)', () => {
+  it('parses a price -> count map', () => {
+    expect(parseTiers({ '187': { '0': { '1.49': 15229, '0.66': 2000 } } }, '187', '0')).toEqual([{ cost: 0.66, count: 2000 }, { cost: 1.49, count: 15229 }]);
+  });
+  it('falls back to the whole response when the country/service keys are absent', () => {
+    expect(parseTiers({ '1.2': 5, '0.9': 7 }, '187', '0')).toEqual([{ cost: 0.9, count: 7 }, { cost: 1.2, count: 5 }]);
+  });
+  it('parses arrays of tiers and string numbers', () => {
+    expect(parseTiers([{ price: '0.5', count: '10' }, { price: '0.7', count: '3' }], '1', 'wa')).toEqual([{ cost: 0.5, count: 10 }, { cost: 0.7, count: 3 }]);
+  });
+});

@@ -99,6 +99,7 @@ function CountryPicker({ service, onBack }: { service: { service_id: string; nam
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState<string | null>(null);
+  const [live, setLive] = useState<Record<string, number>>({});
 
   useEffect(() => {
     setLoading(true);
@@ -122,10 +123,10 @@ function CountryPicker({ service, onBack }: { service: { service_id: string; nam
           <li key={c.country_id} className="card overflow-hidden">
             <button className="flex w-full items-center justify-between gap-3 p-3 text-left" onClick={() => setOpen(open === c.country_id ? null : c.country_id)} aria-expanded={open === c.country_id}>
               <span className="flex items-center gap-3"><span className="text-2xl">{c.flag_emoji ?? '🌐'}</span><span className="font-medium text-neutral-900 dark:text-neutral-100">{c.name}</span></span>
-              <span className="flex items-center gap-3"><span className="text-sm text-neutral-500">from <b className="text-neutral-900 dark:text-neutral-100">{formatCurrency(c.min_price)}</b></span>
+              <span className="flex items-center gap-3"><span className="text-sm text-neutral-500">from <b className="text-neutral-900 dark:text-neutral-100">{formatCurrency(live[c.country_id] ?? c.min_price)}</b></span>
                 <ChevronDown className={`h-4 w-4 transition ${open === c.country_id ? 'rotate-180' : ''}`} /></span>
             </button>
-            {open === c.country_id && <Tiers service={service} country={c} />}
+            {open === c.country_id && <Tiers service={service} country={c} onLive={(p) => setLive((m) => ({ ...m, [c.country_id]: p }))} />}
           </li>
         ))}
       </ul>
@@ -133,26 +134,35 @@ function CountryPicker({ service, onBack }: { service: { service_id: string; nam
   );
 }
 
-function Tiers({ service, country }: { service: { service_id: string; name: string; slug: string }; country: Cty }) {
+function Tiers({ service, country, onLive }: { service: { service_id: string; name: string; slug: string }; country: Cty; onLive: (minPrice: number) => void }) {
   const { formatCurrency } = useI18n();
   const { user } = useAuth();
   const { navigate } = useRouter();
   const [tiers, setTiers] = useState<Tier[] | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [buying, setBuying] = useState<number | null>(null);
+  const [balance, setBalance] = useState<number | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const key = useRef<Record<number, string>>({});
+  const onLiveRef = useRef(onLive);
+  onLiveRef.current = onLive;
 
   const fetchTiers = useCallback(async () => {
     const { data } = await supabase.functions.invoke('catalog-tiers', { body: { service_id: service.service_id, country_id: country.country_id } });
-    setTiers((data?.tiers ?? []) as Tier[]);
+    const list = (data?.tiers ?? []) as Tier[];
+    setTiers(list);
+    if (list.length) onLiveRef.current(Math.min(...list.map((t) => t.price)));
     setNote(data?.reason === 'provider_unreachable' ? 'Live stock could not be loaded. Please try again.' : data?.reason ? 'Out of stock right now.' : null);
   }, [service.service_id, country.country_id]);
   useEffect(() => { fetchTiers(); }, [fetchTiers]);
+  useEffect(() => {
+    if (!user) { setBalance(null); return; }
+    supabase.from('user_wallets').select('balance').maybeSingle().then(({ data }) => setBalance(data ? Number(data.balance) : 0));
+  }, [user]);
 
   async function buy(t: Tier) {
     if (!user) { sessionStorage.setItem('postLoginPath', `/services/${service.slug}`); navigate('/login'); return; }
-    if (!confirm(`Buy a ${service.name} number (${country.name}) for ${formatCurrency(t.price)}? The amount is taken from your balance.`)) return;
+    if (balance !== null && balance < t.price) { setMsg('Insufficient balance. Add funds in your wallet.'); return; }
     setBuying(t.price); setMsg(null);
     key.current[t.price] ??= crypto.randomUUID();
     const { data, error } = await supabase.functions.invoke('orders', { body: { action: 'purchase', service_id: service.service_id, country_id: country.country_id, expected_price: t.price, idempotency_key: key.current[t.price] } });
@@ -175,9 +185,11 @@ function Tiers({ service, country }: { service: { service_id: string; name: stri
       {tiers.map((t) => (
         <div key={t.price} className="flex items-center justify-between rounded-lg bg-neutral-50 px-3 py-2 dark:bg-neutral-900">
           <span className="text-sm text-neutral-700 dark:text-neutral-300">Available {t.quantity.toLocaleString()} qty</span>
-          <button className="btn-primary btn-sm inline-flex items-center gap-1" disabled={buying !== null} onClick={() => buy(t)}>
-            {buying === t.price ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}{formatCurrency(t.price)}
-          </button>
+          {user && balance !== null && balance < t.price
+            ? <button className="btn-secondary btn-sm" onClick={() => navigate('/wallet')} title={`Your balance: ${formatCurrency(balance)}`}>Add funds · {formatCurrency(t.price)}</button>
+            : <button className="btn-primary btn-sm inline-flex items-center gap-1" disabled={buying !== null} onClick={() => buy(t)}>
+                {buying === t.price ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}{formatCurrency(t.price)}
+              </button>}
         </div>
       ))}
       {msg && <p className="flex items-center gap-2 text-sm text-error-700"><AlertCircle className="h-4 w-4" />{msg}</p>}
