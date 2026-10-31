@@ -65,14 +65,29 @@ export async function loadCtx(db: SupabaseClient, serviceId: string, countryId: 
   };
 }
 
+
+// TEMPORARY diagnostics (admin-only log table): records the first few raw price responses that yield <2 tiers.
+async function probe(db: SupabaseClient, action: string, ctx: Ctx, raw: unknown) {
+  try {
+    const { count } = await db.from('provider_sync_logs').select('id', { count: 'exact', head: true }).like('message', 'probe %');
+    if ((count ?? 0) >= 12) return;
+    const { data: job } = await db.from('provider_sync_jobs').select('id').order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (!job) return;
+    await db.from('provider_sync_logs').insert({ sync_job_id: job.id, level: 'info', message: `probe ${action} svc=${ctx.svcCode} cty=${ctx.ctyCode}: ${JSON.stringify(raw).slice(0, 1500)}` });
+  } catch { /* diagnostics must never break pricing */ }
+}
+
 /** Live provider tiers + server-side retail quote. Provider cost is never returned to callers of this helper's public output. */
 export async function liveTiers(db: SupabaseClient, ctx: Ctx, serviceId: string, countryId: string) {
+  // Try every price API version and keep the one that exposes the most tiers.
   let tiers: Tier[] = [];
-  for (const action of ['getPricesV3', 'getPrices']) {
+  for (const action of ['getPricesV3', 'getPricesV2', 'getPrices']) {
     try {
       const raw = await gcall(ctx.base, ctx.key, { action, service: ctx.svcCode, country: ctx.ctyCode }, ctx.timeout);
-      tiers = parseTiers(raw, ctx.ctyCode, ctx.svcCode);
-      if (tiers.length) break;
+      const t = parseTiers(raw, ctx.ctyCode, ctx.svcCode);
+      if (t.length < 2) await probe(db, action, ctx, raw);
+      if (t.length > tiers.length) tiers = t;
+      if (tiers.length >= 2) break;
     } catch { /* try next action */ }
   }
   if (!tiers.length) return [];
