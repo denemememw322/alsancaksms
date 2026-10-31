@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseTiers } from '../../supabase/functions/catalog-tiers/grizzly';
+import { parseTiers } from '../../supabase/functions/catalog-tiers/parse';
 
 describe('parseTiers (provider price tiers)', () => {
   it('parses provider-keyed tiers, merges equal costs and sorts ascending', () => {
