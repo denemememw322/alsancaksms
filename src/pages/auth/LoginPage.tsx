@@ -21,7 +21,9 @@ export function LoginPage() {
     if (signInError) {
       setError(signInError);
     } else {
-      navigate('/dashboard');
+      const next = sessionStorage.getItem('postLoginPath');
+      sessionStorage.removeItem('postLoginPath');
+      navigate(next && next.startsWith('/') ? next : '/dashboard');
     }
   };
 
