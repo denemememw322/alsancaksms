@@ -17,10 +17,7 @@ export function Header() {
 
   const navLinks = [
     { label: 'Services', path: '/services' },
-    { label: 'Countries', path: '/countries' },
-    { label: 'Pricing', path: '/pricing' },
-    { label: 'API', path: '/api-docs' },
-    { label: 'FAQ', path: '/faq' },
+    ...(user ? [{ label: 'Orders', path: '/orders' }, { label: 'Wallet', path: '/wallet' }] : []),
   ];
 
   const isActive = (path: string) => route.path === path;

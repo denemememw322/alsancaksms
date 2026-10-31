@@ -5,8 +5,6 @@ import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { LandingPage } from '@/pages/LandingPage';
 import { DashboardPage } from '@/pages/DashboardPage';
-import { CatalogPage } from '@/pages/CatalogPage';
-import { ServiceDetailPage } from '@/pages/ServiceDetailPage';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { SignUpPage } from '@/pages/auth/SignUpPage';
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage';
@@ -20,6 +18,9 @@ import { AdminPriceHistoryPage } from '@/pages/admin/AdminPriceHistoryPage';
 import { AdminWalletPage } from '@/pages/admin/AdminWalletPage';
 import { AdminPaymentGatewaysPage } from '@/pages/admin/AdminPaymentGatewaysPage';
 import { WalletPage } from '@/pages/WalletPage';
+import { ServicesPage } from '@/pages/ServicesPage';
+import { OrdersPage } from '@/pages/OrdersPage';
+import { AdminOrdersPage } from '@/pages/admin/AdminOrdersPage';
 import { isAdmin } from '@/components/AdminLayout';
 import { MessageSquare } from 'lucide-react';
 
@@ -91,12 +92,13 @@ function AppRoutes() {
 
   // Public pages
   if (path === '/') return <PublicLayout><LandingPage /></PublicLayout>;
-  if (path === '/services') return <PublicLayout><CatalogPage /></PublicLayout>;
-  if (path.startsWith('/services/')) return <PublicLayout><ServiceDetailPage /></PublicLayout>;
+  if (path === '/services' || path.startsWith('/services/')) return <PublicLayout><ServicesPage /></PublicLayout>;
 
   // Protected pages
   if (path === '/dashboard')
     return <ProtectedRoute><PublicLayout><DashboardPage /></PublicLayout></ProtectedRoute>;
+  if (path === '/orders' || path.startsWith('/orders/'))
+    return <ProtectedRoute><PublicLayout><OrdersPage /></PublicLayout></ProtectedRoute>;
   if (path === '/wallet')
     return <ProtectedRoute><PublicLayout><WalletPage /></PublicLayout></ProtectedRoute>;
 
@@ -117,14 +119,11 @@ function AppRoutes() {
     if (path === '/admin/pricing-rules') return <AdminRoute><AdminPricingRulesPage /></AdminRoute>;
     if (path === '/admin/price-history') return <AdminRoute><AdminPriceHistoryPage /></AdminRoute>;
     if (path === '/admin/wallet') return <AdminRoute><AdminWalletPage /></AdminRoute>;
+    if (path === '/admin/orders') return <AdminRoute><AdminOrdersPage /></AdminRoute>;
     if (path === '/admin/payment-gateways') return <AdminRoute><AdminPaymentGatewaysPage /></AdminRoute>;
   }
 
   const placeholders: Record<string, { title: string; description: string }> = {
-    '/countries': { title: 'Countries', description: 'Browse the full country catalog from the Services page, where you can filter by country.' },
-    '/pricing': { title: 'Pricing', description: 'Pricing is visible on each service in the catalog. Configure pricing rules in the admin area.' },
-    '/api-docs': { title: 'Developer API', description: 'API documentation and keys will be available in Phase 8.' },
-    '/faq': { title: 'Frequently asked questions', description: 'The FAQ will be populated with real content soon.' },
     '/terms': { title: 'Terms of Service', description: 'Legal pages will be finalized before production launch.' },
     '/privacy': { title: 'Privacy Policy', description: 'Legal pages will be finalized before production launch.' },
     '/refunds': { title: 'Refund Policy', description: 'Legal pages will be finalized before production launch.' },

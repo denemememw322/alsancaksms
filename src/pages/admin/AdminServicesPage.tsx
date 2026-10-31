@@ -85,7 +85,7 @@ export function AdminServicesPage() {
   async function loadAvailability(svc: Service) {
     setAvailService(svc);
     const [sca, ctr] = await Promise.all([
-      supabase.from('service_country_availability').select('*').eq('service_id', svc.id).order('created_at'),
+      supabase.from('admin_service_availability').select('*').eq('service_id', svc.id).order('created_at'),
       supabase.from('countries').select('*').order('sort_order'),
     ]);
     if (sca.data) setAvailability(sca.data as ServiceCountryAvailability[]);
