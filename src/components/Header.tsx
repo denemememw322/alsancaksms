@@ -9,7 +9,7 @@ import { MessageSquare, Menu, X, Sun, Moon, LogOut, LayoutDashboard, Globe, Shie
 export function Header() {
   const { user, roles, signOut } = useAuth();
   const { resolved, toggle } = useTheme();
-  const { language, setLanguage } = useI18n();
+  const { language, setLanguage, displayCurrency, setDisplayCurrency, canUseTry } = useI18n();
   const { navigate, route } = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
@@ -75,6 +75,15 @@ export function Header() {
               </div>
             )}
           </div>
+
+          {canUseTry && (
+            <div className="flex overflow-hidden rounded-lg border border-neutral-200 text-xs font-semibold dark:border-neutral-800" role="group" aria-label="Currency">
+              {(['USD', 'TRY'] as const).map((c) => (
+                <button key={c} onClick={() => setDisplayCurrency(c)} aria-pressed={displayCurrency === c}
+                  className={`px-2 py-1 ${displayCurrency === c ? 'bg-primary-600 text-white' : 'text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800'}`}>{c === 'USD' ? '$ USD' : '₺ TL'}</button>
+              ))}
+            </div>
+          )}
 
           <button onClick={toggle} className="btn-ghost btn-sm" aria-label="Toggle theme">
             {resolved === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}

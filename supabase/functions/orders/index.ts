@@ -23,6 +23,9 @@ Deno.serve(async (req) => {
   if (!uid) return json({ error: 'Please sign in', code: 'auth' }, 401);
 
   const db = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
+  const { data: prof } = await db.from('profiles').select('status').eq('id', uid).maybeSingle();
+  if (prof && prof.status !== 'active') return json({ error: 'Your account is suspended.' }, 403);
+
   let b: Record<string, string | number | undefined>;
   try { b = await req.json(); } catch { return json({ error: 'invalid json' }, 400); }
 
@@ -109,7 +112,7 @@ Deno.serve(async (req) => {
       if (!open) return json({ order: await pub(o.id) });
       const stale = !o.last_checked_at || Date.now() - new Date(o.last_checked_at).getTime() > 3000;
       if (o.status === 'pending' && Date.now() - new Date(o.created_at).getTime() > 120_000) { await set(o.id, 'needs_review', 'stuck in pending'); return json({ order: await pub(o.id) }); }
-      if (!stale || !o.provider_activation_id) return json({ order: await pub(o.id) });
+      if (!stale || !o.provider_activation_id || !o.service_id || !o.country_id) return json({ order: await pub(o.id) });
       const ctx = await provider(o);
       if (!ctx) return json({ order: await pub(o.id) });
       await db.from('orders').update({ last_checked_at: new Date().toISOString() }).eq('id', o.id);
@@ -132,7 +135,7 @@ Deno.serve(async (req) => {
     }
 
     if (b.action === 'cancel') {
-      if (o.status !== 'active' || o.sms_code || !o.provider_activation_id) return json({ error: 'This order can no longer be cancelled.' }, 409);
+      if (o.status !== 'active' || o.sms_code || !o.provider_activation_id || !o.service_id || !o.country_id) return json({ error: 'This order can no longer be cancelled.' }, 409);
       const ctx = await provider(o);
       if (!ctx) return json({ error: 'Provider unavailable' }, 502);
       let r: string;
@@ -144,7 +147,7 @@ Deno.serve(async (req) => {
 
     if (b.action === 'complete') {
       if (o.status !== 'received' || !o.provider_activation_id) return json({ error: 'Nothing to complete yet.' }, 409);
-      const ctx = await provider(o);
+      const ctx = o.service_id && o.country_id ? await provider(o) : null;
       if (ctx) await gcall(ctx.base, ctx.key, { action: 'setStatus', id: o.provider_activation_id, status: '6' }, ctx.timeout).catch(() => '');
       await set(o.id, 'completed', 'completed by user');
       return json({ order: await pub(o.id) });
