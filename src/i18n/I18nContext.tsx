@@ -9,6 +9,9 @@ interface I18nContextValue {
   t: (key: string) => string;
   rtl: boolean;
   formatCurrency: (amount: number, currency?: string) => string;
+  displayCurrency: 'USD' | 'TRY';
+  setDisplayCurrency: (c: 'USD' | 'TRY') => void;
+  canUseTry: boolean;
   formatDate: (date: string | Date) => string;
   formatNumber: (num: number) => string;
 }
@@ -35,6 +38,13 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     if (typeof window === 'undefined') return 'en';
     return detectInitialLanguage();
   });
+
+  const [displayCurrency, setDisplayCurrencyState] = useState<'USD' | 'TRY'>(() => (typeof window !== 'undefined' && localStorage.getItem('alsancak.currency') === 'TRY' ? 'TRY' : 'USD'));
+  const [usdTry, setUsdTry] = useState<number | null>(null);
+  const setDisplayCurrency = useCallback((c: 'USD' | 'TRY') => { setDisplayCurrencyState(c); localStorage.setItem('alsancak.currency', c); }, []);
+  useEffect(() => {
+    supabase.rpc('get_usd_try').then(({ data }) => { const n = Number(data); setUsdTry(Number.isFinite(n) && n > 0 ? n : null); });
+  }, []);
 
   const setLanguage = useCallback((code: LanguageCode) => {
     setLanguageState(code);
@@ -74,17 +84,23 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     return dict[key] ?? translations.en[key] ?? key;
   }, [language]);
 
+  // All stored prices/balances are USD. Customers can view them in TRY (admin screens always stay USD).
   const formatCurrency = useCallback((amount: number, currency = 'USD'): string => {
+    const inAdmin = typeof window !== 'undefined' && window.location.hash.startsWith('#/admin');
+    let value = amount;
+    let cur = currency;
+    if (cur === 'USD' && displayCurrency === 'TRY' && usdTry && !inAdmin) { value = amount * usdTry; cur = 'TRY'; }
     try {
       return new Intl.NumberFormat(language, {
         style: 'currency',
-        currency,
+        currency: cur,
         minimumFractionDigits: 2,
-      }).format(amount);
+        maximumFractionDigits: Math.abs(value) < 1 ? 3 : 2,
+      }).format(value);
     } catch {
-      return `${currency} ${amount.toFixed(2)}`;
+      return `${cur} ${value.toFixed(2)}`;
     }
-  }, [language]);
+  }, [language, displayCurrency, usdTry]);
 
   const formatDate = useCallback((date: string | Date): string => {
     try {
@@ -115,6 +131,9 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     t,
     rtl: isRTL(language),
     formatCurrency,
+    displayCurrency,
+    setDisplayCurrency,
+    canUseTry: usdTry != null,
     formatDate,
     formatNumber,
   };

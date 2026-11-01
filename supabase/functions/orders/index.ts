@@ -23,6 +23,9 @@ Deno.serve(async (req) => {
   if (!uid) return json({ error: 'Please sign in', code: 'auth' }, 401);
 
   const db = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
+  const { data: prof } = await db.from('profiles').select('status').eq('id', uid).maybeSingle();
+  if (prof && prof.status !== 'active') return json({ error: 'Your account is suspended.' }, 403);
+
   let b: Record<string, string | number | undefined>;
   try { b = await req.json(); } catch { return json({ error: 'invalid json' }, 400); }
 

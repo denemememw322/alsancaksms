@@ -21,6 +21,8 @@ import { WalletPage } from '@/pages/WalletPage';
 import { ServicesPage } from '@/pages/ServicesPage';
 import { OrdersPage } from '@/pages/OrdersPage';
 import { AdminOrdersPage } from '@/pages/admin/AdminOrdersPage';
+import { AdminUsersPage } from '@/pages/admin/AdminUsersPage';
+import { AdminSettingsPage } from '@/pages/admin/AdminSettingsPage';
 import { isAdmin } from '@/components/AdminLayout';
 import { MessageSquare } from 'lucide-react';
 
@@ -120,6 +122,8 @@ function AppRoutes() {
     if (path === '/admin/price-history') return <AdminRoute><AdminPriceHistoryPage /></AdminRoute>;
     if (path === '/admin/wallet') return <AdminRoute><AdminWalletPage /></AdminRoute>;
     if (path === '/admin/orders') return <AdminRoute><AdminOrdersPage /></AdminRoute>;
+    if (path === '/admin/users') return <AdminRoute><AdminUsersPage /></AdminRoute>;
+    if (path === '/admin/settings') return <AdminRoute><AdminSettingsPage /></AdminRoute>;
     if (path === '/admin/payment-gateways') return <AdminRoute><AdminPaymentGatewaysPage /></AdminRoute>;
   }
 
