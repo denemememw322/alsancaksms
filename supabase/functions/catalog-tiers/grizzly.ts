@@ -1,7 +1,7 @@
 // Shared GrizzlySMS helpers (copied into each function bundle). The API key never leaves the server.
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2';
-import { parseTiers, parseServices, type Tier } from './parse.ts';
-export { parseTiers, parseServices };
+import { parseTiers, parseServices, pickCountryTiers, type Tier } from './parse.ts';
+export { parseTiers, parseServices, pickCountryTiers };
 export type { Tier };
 
 export const CORS = {
@@ -41,29 +41,38 @@ export async function gcall(base: URL, key: string, params: Record<string, strin
   try { return JSON.parse(text); } catch { return text; }
 }
 
-export interface ProviderCtx { base: URL; key: string; timeout: number; providerId: string }
+export interface ProviderCtx { base: URL; key: string; timeout: number; providerId: string; cancelDelay: number }
 export async function providerCtx(db: SupabaseClient, providerId: string): Promise<ProviderCtx | null> {
-  const { data: prov } = await db.from('providers').select('base_url,request_timeout_ms').eq('id', providerId).maybeSingle();
+  const { data: prov } = await db.from('providers').select('base_url,request_timeout_ms,cancel_delay_seconds').eq('id', providerId).maybeSingle();
   if (!prov?.base_url) return null;
   const { data: key } = await db.rpc('get_provider_secret', { p_provider_id: providerId, p_key: 'api_key' });
   if (!key) return null;
-  return { base: await assertSafeUrl(prov.base_url), key, providerId, timeout: Math.min(Math.max(prov.request_timeout_ms ?? 15000, 3000), 60000) };
+  return { base: await assertSafeUrl(prov.base_url), key, providerId, cancelDelay: Number(prov.cancel_delay_seconds ?? 120), timeout: Math.min(Math.max(prov.request_timeout_ms ?? 15000, 3000), 60000) };
 }
 
-/** Every country that currently has numbers for one platform. ok=false means the provider could not be reached (never treat as "no stock"). */
-export async function fetchServicePrices(p: ProviderCtx, code: string): Promise<{ ok: boolean; raw: any }> {
-  let reached = false;
-  for (const action of ['getPricesV3', 'getPrices']) {
+/**
+ * Every country that currently has numbers for one platform, with ALL its price options.
+ * getPricesV2 lists every option ({"0.165": 76005, ...}); getPricesV3 only the cheapest. V2 wins, V3/v1 are fallbacks.
+ * ok=false means the provider could not be reached (never treat that as "no stock").
+ */
+export async function fetchServiceTiers(p: ProviderCtx, code: string): Promise<{ ok: boolean; byCountry: Map<string, Tier[]> }> {
+  const call = async (action: string) => {
     try {
       const raw = await gcall(p.base, p.key, { action, service: code }, Math.max(p.timeout, 30000));
-      reached = true;
-      if (raw && typeof raw === 'object' && !Array.isArray(raw) && Object.keys(raw).length) return { ok: true, raw };
-    } catch { /* try next */ }
+      return { ok: true, raw: raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {} };
+    } catch { return { ok: false, raw: {} as Record<string, unknown> }; }
+  };
+  const [v2, v3] = await Promise.all([call('getPricesV2'), call('getPricesV3')]);
+  const v1 = !Object.keys(v2.raw).length && !Object.keys(v3.raw).length ? await call('getPrices') : { ok: false, raw: {} as Record<string, unknown> };
+  const byCountry = new Map<string, Tier[]>();
+  for (const cid of new Set([...Object.keys(v2.raw), ...Object.keys(v3.raw), ...Object.keys(v1.raw)])) {
+    const t = pickCountryTiers([v2.raw, v3.raw, v1.raw], cid, code);
+    if (t.length) byCountry.set(cid, t);
   }
-  return { ok: reached, raw: {} };
+  return { ok: v2.ok || v3.ok || v1.ok, byCountry };
 }
 
-export interface Ctx { base: URL; key: string; providerId: string; svcCode: string; ctyCode: string; timeout: number; serviceName: string; countryName: string }
+export interface Ctx { base: URL; key: string; providerId: string; svcCode: string; ctyCode: string; timeout: number; cancelDelay: number; serviceName: string; countryName: string }
 export async function loadCtx(db: SupabaseClient, serviceId: string, countryId: string): Promise<Ctx | null> {
   const { data: a } = await db.from('service_country_availability').select('provider_id')
     .eq('service_id', serviceId).eq('country_id', countryId).eq('is_enabled', true).limit(1).maybeSingle();
@@ -77,42 +86,30 @@ export async function loadCtx(db: SupabaseClient, serviceId: string, countryId: 
   ]);
   if (!p || !sm.data || !cm.data) return null;
   return {
-    base: p.base, key: p.key, providerId: a.provider_id, timeout: Math.min(p.timeout, 30000),
+    base: p.base, key: p.key, providerId: a.provider_id, timeout: Math.min(p.timeout, 30000), cancelDelay: p.cancelDelay,
     svcCode: sm.data.provider_service_id, ctyCode: cm.data.provider_country_id,
     serviceName: svc.data?.name ?? '', countryName: cty.data?.name ?? '',
   };
 }
 
-// TEMPORARY diagnostics (admin-only log table): first raw price responses, to confirm the provider's multi-tier format.
-async function probe(db: SupabaseClient, action: string, ctx: Ctx, raw: unknown, tiers: number) {
-  try {
-    const prefix = tiers >= 2 ? 'probe-multi' : 'probe';
-    const { count } = await db.from('provider_sync_logs').select('id', { count: 'exact', head: true }).like('message', `${prefix} %`);
-    if ((count ?? 0) >= (tiers >= 2 ? 6 : 12)) return;
-    const { data: job } = await db.from('provider_sync_jobs').select('id').order('created_at', { ascending: false }).limit(1).maybeSingle();
-    if (!job) return;
-    await db.from('provider_sync_logs').insert({ sync_job_id: job.id, level: 'info', message: `${prefix} ${action} svc=${ctx.svcCode} cty=${ctx.ctyCode}: ${JSON.stringify(raw).slice(0, 1500)}` });
-  } catch { /* diagnostics must never break pricing */ }
-}
-
 /**
- * Customer view of one service+country: the provider's LIVE tiers, restricted to the tiers the admin left enabled,
- * priced as live cost x the admin's ratio (so prices follow provider cost and never go below it).
- * Equal sell prices are merged. Provider cost is only returned for server-side use (orders: maxPrice).
+ * Customer view of one service+country. The provider's live options are first written to the database
+ * (so cost, stock and the admin's ratio/ticks are always in step), then the enabled, in-stock options are read back.
+ * Sell price = provider cost x admin ratio, never below cost. Equal sell prices are merged.
+ * Returns null when the provider cannot be reached (callers must not treat that as "out of stock").
  */
 export async function liveTiers(db: SupabaseClient, ctx: Ctx, serviceId: string, countryId: string) {
-  let best: Tier[] = [];
-  for (const action of ['getPricesV3', 'getPricesV2', 'getPrices']) {
-    try {
-      const raw = await gcall(ctx.base, ctx.key, { action, service: ctx.svcCode, country: ctx.ctyCode }, ctx.timeout);
-      const t = parseTiers(raw, ctx.ctyCode, ctx.svcCode);
-      await probe(db, action, ctx, raw, t.length);
-      if (t.length > best.length) best = t;
-      if (best.length >= 2) break;
-    } catch { /* try next action */ }
-  }
-  if (!best.length) return [];
-  const { data } = await db.rpc('quote_tiers', { p_service: serviceId, p_country: countryId, p_live: best.map((t) => ({ key: t.key, cost: t.cost, count: t.count })) });
+  const call = async (action: string) => {
+    try { return { ok: true, raw: await gcall(ctx.base, ctx.key, { action, service: ctx.svcCode, country: ctx.ctyCode }, ctx.timeout) }; }
+    catch { return { ok: false, raw: null as unknown }; }
+  };
+  const [v2, v3] = await Promise.all([call('getPricesV2'), call('getPricesV3')]);
+  let reached = v2.ok || v3.ok;
+  let tiers = pickCountryTiers([v2.raw, v3.raw], ctx.ctyCode, ctx.svcCode);
+  if (!tiers.length) { const v1 = await call('getPrices'); reached = reached || v1.ok; tiers = pickCountryTiers([v1.raw], ctx.ctyCode, ctx.svcCode); }
+  if (!reached) return null;
+  await db.rpc('upsert_tiers', { p_provider: ctx.providerId, p_service: serviceId, p_country: countryId, p_tiers: tiers, p_enable_new: true });
+  const { data } = await db.rpc('quote_tiers', { p_service: serviceId, p_country: countryId });
   const groups = new Map<number, { retail: number; cost: number; count: number }>();
   for (const r of (data ?? []) as Array<{ cost: string | number; quantity: string | number; retail: string | number }>) {
     const retail = Number(r.retail), cost = Number(r.cost), qty = Number(r.quantity);

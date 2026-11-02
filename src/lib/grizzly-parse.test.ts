@@ -44,3 +44,19 @@ describe('parseServices', () => {
   });
   it('returns [] for junk', () => { expect(parseServices('BAD_KEY')).toEqual([]); expect(parseServices(null)).toEqual([]); });
 });
+
+import { pickCountryTiers } from '../../supabase/functions/catalog-tiers/parse';
+
+describe('pickCountryTiers (V2 lists every option, V3 only the cheapest)', () => {
+  const v2 = { '33': { wa: { '0.1650': 76005, '0.1900': 5995, '1.5000': 4427 } } };
+  const v3 = { '33': { wa: { price: 0.165, count: 76005 } } };
+  it('prefers the V2 multi-option list', () => {
+    const t = pickCountryTiers([v2, v3], '33', 'wa');
+    expect(t.map((x) => x.cost)).toEqual([0.165, 0.19, 1.5]);
+    expect(t.map((x) => x.key)).toEqual(['p:0.1650', 'p:0.1900', 'p:1.5000']);
+  });
+  it('falls back to V3 when V2 is null (e.g. getPricesV2 returned null for abk)', () => {
+    expect(pickCountryTiers([null, { '43': { abk: { price: 0.21, count: 206400 } } }], '43', 'abk')).toEqual([{ key: 'default', cost: 0.21, count: 206400 }]);
+  });
+  it('returns [] when nothing has stock', () => { expect(pickCountryTiers([null, {}, 'NO_NUMBERS'], '1', 'wa')).toEqual([]); });
+});

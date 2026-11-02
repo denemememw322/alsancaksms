@@ -226,6 +226,7 @@ function Manager({ id, onBack }: { id: string; onBack: () => void }) {
   const [all, setAll] = useState<Cty[]>([]);
   const [cPicked, setCPicked] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.rpc('admin_service_detail', { p_service: id });
@@ -243,6 +244,12 @@ function Manager({ id, onBack }: { id: string; onBack: () => void }) {
     setMsg(null);
     const { data, error } = await supabase.rpc('admin_bulk_set_ratio', { p_service: id, p_ratio: r, p_only_enabled: onlyEnabled });
     if (error) setMsg(error.message); else { setMsg(`Updated ${data} price options. Prices will keep following provider cost with this multiplier.`); load(); }
+  }
+  async function refreshNow() {
+    setRefreshing(true); setMsg(null);
+    const r = await callFn<{ synced: number; failed: number }>('price-sync', { service_id: id });
+    setRefreshing(false);
+    if (r.error) setMsg(r.error); else { setMsg(r.data!.failed ? 'The provider could not be reached. Nothing was changed.' : 'Prices and options refreshed from the provider.'); load(); }
   }
   async function openMore() {
     setMore(!more);
@@ -271,6 +278,7 @@ function Manager({ id, onBack }: { id: string; onBack: () => void }) {
           <label className="flex items-center gap-2 pb-2 text-sm"><input type="checkbox" checked={onlyEnabled} onChange={(e) => setOnlyEnabled(e.target.checked)} />only ticked options</label>
           <button className="btn-primary btn-sm" disabled={!(Number(ratio) >= 1)} onClick={bulk}>Apply to all countries</button>
           <span className="pb-2 text-xs text-neutral-500">e.g. 2 = 100% markup. You can still set an exact price on any single option below.</span>
+          <button className="btn-secondary btn-sm ml-auto inline-flex items-center gap-1" disabled={refreshing} onClick={refreshNow}>{refreshing && <Loader2 className="h-4 w-4 animate-spin" />}Refresh from provider</button>
         </div>
         {d.mapping && <div><button className="inline-flex items-center gap-1 text-sm font-medium text-primary-600" onClick={openMore}>{more ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}Add more countries</button>
           {more && <div className="mt-2 space-y-2"><CountryPicker countries={all.filter((c) => !existing.has(c.country_id))} picked={cPicked} setPicked={setCPicked} />
