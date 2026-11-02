@@ -1,7 +1,7 @@
 // price-sync: keeps tiers, stock and prices in step with the provider (cron or admin).
 // Prices follow the provider cost with the admin's ratio and never go below cost. Also refreshes USD/TRY from TCMB.
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { CORS, json, providerCtx, fetchServicePrices, parseTiers, type ProviderCtx } from './grizzly.ts';
+import { CORS, json, providerCtx, fetchServiceTiers, type ProviderCtx } from './grizzly.ts';
 
 async function updateFx(db: ReturnType<typeof createClient>) {
   try {
@@ -29,11 +29,12 @@ Deno.serve(async (req) => {
   }
   if (!allowed) return json({ error: 'forbidden' }, 403);
 
-  let limit = 25;
-  try { const b = await req.json(); limit = Math.min(Math.max(Number(b?.limit) || 25, 1), 60); } catch { /* defaults */ }
+  let limit = 25; let onlyService: string | null = null;
+  try { const b = await req.json(); limit = Math.min(Math.max(Number(b?.limit) || 25, 1), 60); if (typeof b?.service_id === 'string' && /^[0-9a-f-]{36}$/i.test(b.service_id)) onlyService = b.service_id; } catch { /* defaults */ }
 
-  const { data: services } = await db.from('services').select('id,country_mode').eq('is_active', true)
-    .order('last_price_sync_at', { ascending: true, nullsFirst: true }).limit(limit);
+  let q = db.from('services').select('id,country_mode').eq('is_active', true);
+  if (onlyService) q = q.eq('id', onlyService);
+  const { data: services } = await q.order('last_price_sync_at', { ascending: true, nullsFirst: true }).limit(limit);
   const provCache = new Map<string, ProviderCtx | null>();
   const cmCache = new Map<string, Array<{ provider_country_id: string; country_id: string }>>();
   let synced = 0, failed = 0;
@@ -47,13 +48,13 @@ Deno.serve(async (req) => {
       if (!p) { failed++; continue; }
       let cm = cmCache.get(m.provider_id);
       if (!cm) { const r = await db.from('provider_country_mappings').select('provider_country_id,country_id').eq('provider_id', m.provider_id); cm = r.data ?? []; cmCache.set(m.provider_id, cm); }
-      const { ok, raw } = await fetchServicePrices(p, m.provider_service_id);
+      const { ok, byCountry } = await fetchServiceTiers(p, m.provider_service_id);
       if (!ok) { failed++; continue; }                       // unreachable: never zero out stock on an outage
       const { data: existing } = await db.from('service_country_availability').select('country_id').eq('service_id', s.id).eq('provider_id', m.provider_id);
       const targets = new Set((existing ?? []).map((e: { country_id: string }) => e.country_id));
-      if (s.country_mode === 'all') for (const c of cm) if (raw?.[c.provider_country_id] && typeof raw[c.provider_country_id] === 'object') targets.add(c.country_id);
+      if (s.country_mode === 'all') for (const c of cm) if (byCountry.has(c.provider_country_id)) targets.add(c.country_id);
       const toProv = new Map(cm.map((c) => [c.country_id, c.provider_country_id]));
-      const jobs = [...targets].map((cid) => ({ cid, tiers: toProv.get(cid) ? parseTiers(raw, toProv.get(cid)!, m.provider_service_id) : [] }));
+      const jobs = [...targets].map((cid) => ({ cid, tiers: byCountry.get(toProv.get(cid) ?? '') ?? [] }));
       for (let i = 0; i < jobs.length; i += 10) {
         await Promise.all(jobs.slice(i, i + 10).map((j) => db.rpc('upsert_tiers', { p_provider: m.provider_id, p_service: s.id, p_country: j.cid, p_tiers: j.tiers, p_enable_new: true })));
       }

@@ -21,6 +21,7 @@ Deno.serve(async (req) => {
     const ctx = await loadCtx(db, b.service_id, b.country_id);
     if (!ctx) return json({ tiers: [], reason: 'unavailable' });
     const tiers = await liveTiers(db, ctx, b.service_id, b.country_id);
+    if (tiers === null) return json({ tiers: [], reason: 'provider_unreachable' });
     const body = { tiers: tiers.map((t) => ({ quantity: t.count, price: t.retail })), reason: tiers.length ? null : 'out_of_stock' };
     cache.set(ck, { at: Date.now(), body });
     if (cache.size > 500) cache.clear();

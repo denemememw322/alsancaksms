@@ -2,7 +2,7 @@
 //  platforms -> live list of every platform the provider offers
 //  add       -> add platforms; every country that really has numbers is added automatically (or only the chosen countries)
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { CORS, json, gcall, providerCtx, fetchServicePrices, parseTiers, parseServices } from './grizzly.ts';
+import { CORS, json, gcall, providerCtx, fetchServiceTiers, parseServices, type Tier } from './grizzly.ts';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 const chunks = <T,>(a: T[], n: number) => Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n));
@@ -44,17 +44,15 @@ Deno.serve(async (req) => {
       for (const s of services) {
         const { data: sid, error: e1 } = await db.rpc('admin_ensure_service', { p_provider: b.provider_id, p_code: s.code, p_name: s.name, p_mode: sel ? 'selected' : 'all' });
         if (e1 || !sid) { results.push({ code: s.code, name: s.name, error: 'could not create service' }); continue; }
-        const { ok, raw } = await fetchServicePrices(p, s.code);
+        const { ok, byCountry } = await fetchServiceTiers(p, s.code);
         if (!ok) { results.push({ code: s.code, name: s.name, error: 'provider unreachable' }); continue; }
-        const jobs: Array<{ country: string; tiers: ReturnType<typeof parseTiers> }> = [];
+        const jobs: Array<{ country: string; tiers: Tier[] }> = [];
         let unmapped = 0;
-        for (const cid of Object.keys(raw)) {
-          if (!raw[cid] || typeof raw[cid] !== 'object') continue;
+        for (const [cid, tiers] of byCountry) {
           const internal = toInternal.get(cid);
           if (!internal) { unmapped++; continue; }
           if (sel && !sel.has(internal)) continue;
-          const tiers = parseTiers(raw, cid, s.code);
-          if (tiers.length) jobs.push({ country: internal, tiers });   // only countries that really have numbers
+          jobs.push({ country: internal, tiers });   // byCountry only contains countries that really have numbers
         }
         let countries = 0, tiers = 0;
         for (const part of chunks(jobs, 10)) {

@@ -7,9 +7,9 @@ import { Copy, Loader2, AlertCircle, CheckCircle2, XCircle, Clock, Phone, ArrowL
 interface Order {
   id: string; service_name: string; country_name: string; status: 'pending' | 'active' | 'received' | 'completed' | 'cancelled' | 'failed' | 'needs_review';
   retail_price: number; currency: string; phone_number: string | null; sms_code: string | null; refunded_at: string | null;
-  error_message: string | null; expires_at: string | null; created_at: string;
+  error_message: string | null; expires_at: string | null; cancel_available_at: string | null; created_at: string;
 }
-const COLS = 'id,service_name,country_name,status,retail_price,currency,phone_number,sms_code,refunded_at,error_message,expires_at,created_at';
+const COLS = 'id,service_name,country_name,status,retail_price,currency,phone_number,sms_code,refunded_at,error_message,expires_at,cancel_available_at,created_at';
 const LABEL: Record<Order['status'], { text: string; cls: string }> = {
   pending: { text: 'Processing', cls: 'badge-neutral' }, active: { text: 'Waiting for SMS', cls: 'badge-neutral' },
   received: { text: 'SMS received', cls: 'badge-success' }, completed: { text: 'Completed', cls: 'badge-success' },
@@ -53,6 +53,7 @@ function OrderDetail({ id, back }: { id: string; back: () => void }) {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [left, setLeft] = useState('');
+  const [cancelIn, setCancelIn] = useState(0);
   const timer = useRef<number | null>(null);
 
   const call = useCallback(async (action: string) => {
@@ -74,11 +75,14 @@ function OrderDetail({ id, back }: { id: string; back: () => void }) {
 
   useEffect(() => { refresh(); timer.current = window.setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 5000); return () => { if (timer.current) window.clearInterval(timer.current); }; }, [refresh]);
   useEffect(() => {
-    const t = window.setInterval(() => {
-      if (!o?.expires_at || !['active'].includes(o.status)) { setLeft(''); return; }
-      const s = Math.max(0, Math.floor((new Date(o.expires_at).getTime() - Date.now()) / 1000));
-      setLeft(`${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`);
-    }, 1000);
+    const tick = () => {
+      if (!o || o.status !== 'active') { setLeft(''); setCancelIn(0); return; }
+      if (o.expires_at) { const s = Math.max(0, Math.floor((new Date(o.expires_at).getTime() - Date.now()) / 1000)); setLeft(`${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`); }
+      const at = o.cancel_available_at ? new Date(o.cancel_available_at).getTime() : new Date(o.created_at).getTime() + 120_000;
+      setCancelIn(Math.max(0, Math.ceil((at - Date.now()) / 1000)));
+    };
+    tick();
+    const t = window.setInterval(tick, 1000);
     return () => window.clearInterval(t);
   }, [o]);
 
@@ -104,7 +108,12 @@ function OrderDetail({ id, back }: { id: string; back: () => void }) {
               <button className="btn-secondary btn-sm inline-flex items-center gap-1" onClick={() => navigator.clipboard.writeText(o.phone_number!.replace('+', ''))}><Copy className="h-4 w-4" />Copy</button></div>
           </div>
         )}
-        {o.status === 'active' && <p className="mb-4 flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400"><Loader2 className="h-4 w-4 animate-spin" />Waiting for the SMS… {left && <span className="inline-flex items-center gap-1"><Clock className="h-4 w-4" />{left}</span>}</p>}
+        {o.status === 'active' && (
+          <div className="mb-4 space-y-1 text-sm text-neutral-600 dark:text-neutral-400">
+            <p className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Waiting for the SMS… {left && <span className="inline-flex items-center gap-1"><Clock className="h-4 w-4" />expires in {left}</span>}</p>
+            {!o.sms_code && <p>{cancelIn > 0 ? <>You can cancel in <b className="font-mono">{Math.floor(cancelIn / 60)}:{String(cancelIn % 60).padStart(2, '0')}</b>. If no SMS arrives, you will be refunded.</> : 'You can cancel now and get a full refund if no SMS arrived.'}</p>}
+          </div>
+        )}
         {o.sms_code && (
           <div className="mb-4 rounded-lg border border-success-300 bg-success-50 p-4 dark:bg-success-950/30"><div className="mb-1 flex items-center gap-1 text-xs uppercase tracking-wide text-success-700"><CheckCircle2 className="h-3.5 w-3.5" />SMS code</div>
             <div className="flex items-center justify-between"><span className="font-mono text-2xl font-bold">{o.sms_code}</span><button className="btn-secondary btn-sm inline-flex items-center gap-1" onClick={() => navigator.clipboard.writeText(o.sms_code!)}><Copy className="h-4 w-4" />Copy</button></div></div>
@@ -113,7 +122,7 @@ function OrderDetail({ id, back }: { id: string; back: () => void }) {
         {(o.status === 'cancelled' || o.status === 'failed') && <p className="mb-4 flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400"><XCircle className="h-4 w-4" />{o.refunded_at ? 'This order was refunded to your balance.' : 'This order was not charged.'}</p>}
         {err && <p className="mb-3 text-sm text-error-700">{err}</p>}
         <div className="flex gap-2">
-          {o.status === 'active' && !o.sms_code && <button className="btn-secondary btn-sm" disabled={busy} onClick={() => act('cancel')}>Cancel &amp; refund</button>}
+          {o.status === 'active' && !o.sms_code && <button className="btn-secondary btn-sm" disabled={busy || cancelIn > 0} onClick={() => act('cancel')}>{cancelIn > 0 ? `Cancel available in ${Math.floor(cancelIn / 60)}:${String(cancelIn % 60).padStart(2, '0')}` : 'Cancel & refund'}</button>}
           {o.status === 'received' && <button className="btn-primary btn-sm" disabled={busy} onClick={() => act('complete')}>Mark as completed</button>}
         </div>
       </div>

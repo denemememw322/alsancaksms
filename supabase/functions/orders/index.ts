@@ -4,7 +4,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { CORS, json, loadCtx, liveTiers, gcall } from './grizzly.ts';
 
-const SAFE = 'id,service_name,country_name,status,retail_price,currency,phone_number,sms_code,sms_text,refunded_at,error_message,expires_at,created_at,completed_at';
+const SAFE = 'id,service_name,country_name,status,retail_price,currency,phone_number,sms_code,sms_text,refunded_at,error_message,expires_at,cancel_available_at,created_at,completed_at';
 const PROVIDER_REFUSALS = /^(NO_NUMBERS|NO_BALANCE|BAD_SERVICE|BAD_COUNTRY|WRONG_MAX_PRICE|WRONG_SERVICE|BANNED|The service is prohibited)/i;
 const USER_MSG: Record<string, string> = {
   NO_NUMBERS: 'No numbers are available right now. You were not charged.',
@@ -51,6 +51,7 @@ Deno.serve(async (req) => {
       const ctx = await loadCtx(db, service_id, country_id);
       if (!ctx) return json({ error: 'This service is not available for the selected country.' }, 409);
       const tiers = await liveTiers(db, ctx, service_id, country_id);
+      if (tiers === null) return json({ error: 'The provider is unreachable right now. You were not charged. Please try again.' }, 502);
       if (!tiers.length) return json({ error: 'Out of stock. You were not charged.' }, 409);
       const tier = tiers.find((t) => Math.abs(t.retail - Number(expected_price)) < 0.00005);
       if (!tier) return json({ error: 'The price changed. Please review the new prices.', code: 'price_changed' }, 409);
@@ -83,7 +84,7 @@ Deno.serve(async (req) => {
       const text = typeof res === 'string' ? res : JSON.stringify(res);
       const m = text.match(/^ACCESS_NUMBER:(\d+):(\d+)$/);
       if (m) {
-        await db.from('orders').update({ provider_activation_id: m[1], phone_number: `+${m[2]}`, last_checked_at: new Date().toISOString() }).eq('id', oid);
+        await db.from('orders').update({ provider_activation_id: m[1], phone_number: `+${m[2]}`, last_checked_at: new Date().toISOString(), cancel_available_at: new Date(Date.now() + ctx.cancelDelay * 1000).toISOString() }).eq('id', oid);
         await set(oid, 'active', 'number allocated');
         return json({ order: await pub(oid) });
       }
@@ -136,6 +137,8 @@ Deno.serve(async (req) => {
 
     if (b.action === 'cancel') {
       if (o.status !== 'active' || o.sms_code || !o.provider_activation_id || !o.service_id || !o.country_id) return json({ error: 'This order can no longer be cancelled.' }, 409);
+      const wait = o.cancel_available_at ? new Date(o.cancel_available_at).getTime() - Date.now() : 0;
+      if (wait > 0) return json({ error: `The provider allows cancelling in ${Math.ceil(wait / 1000)} seconds.`, code: 'too_early', retry_after: Math.ceil(wait / 1000) }, 409);
       const ctx = await provider(o);
       if (!ctx) return json({ error: 'Provider unavailable' }, 502);
       let r: string;

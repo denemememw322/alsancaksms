@@ -55,3 +55,12 @@ export function parseServices(raw: any): Array<{ code: string; name: string }> {
   }
   return out;
 }
+
+/** First source (in priority order) that yields tiers for this country+service, e.g. [getPricesV2, getPricesV3, getPrices]. */
+export function pickCountryTiers(sources: any[], country: string, service: string): Tier[] {
+  for (const s of sources) {
+    const t = parseTiers(s, country, service);
+    if (t.length) return t;
+  }
+  return [];
+}
