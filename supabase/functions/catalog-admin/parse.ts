@@ -10,7 +10,8 @@ const num = (v: unknown): number | null => {
  * Format-tolerant price tier parser. Every tier gets a stable key so admin settings survive price changes:
  *  - { cost|price, count|... }                   single tier                    -> key "default"
  *  - { "<providerId>": { price, count }, ... }   provider-keyed tiers           -> key "<providerId>"
- *  - { "1.49": 15229, "0.66": 2000 }             price -> count map             -> key "p:<price>"
+ *  - { "1.49": 15229, "0.66": 2000 }             price -> count map (V2)        -> key "p:<price>"
+ *  - { price, count, providers:{id:{price:[x],count}} }  (V3) grouped by price   -> key "p:<price>"
  *  - arrays of any of the above                                                 -> key "i<index>"
  *  optionally nested under { country: { service: ... } }
  */
@@ -24,6 +25,17 @@ export function parseTiers(raw: any, country: string, service: string): Tier[] {
   const walk = (node: any, depth: number, hint: string) => {
     if (node == null || typeof node !== 'object' || depth > 6) return;
     if (Array.isArray(node)) { node.forEach((n, i) => walk(n, depth + 1, `i${i}`)); return; }
+    // getPricesV3: { price: <cheapest>, count: <total of all providers>, providers: { "<id>": { count, price: [x] } } }
+    // The top-level price/count is only a summary; the real options are the providers' prices (grouped by price).
+    if (node.providers && typeof node.providers === 'object' && !Array.isArray(node.providers)) {
+      for (const p of Object.values(node.providers as Record<string, any>)) {
+        const list: unknown[] = Array.isArray(p?.price) ? p.price : [p?.price];
+        const prices: number[] = list.map(num).filter((x): x is number => x != null);
+        const cnt = num(p?.count);
+        if (cnt != null) prices.forEach((pr) => add(`p:${pr}`, pr, cnt / prices.length));
+      }
+      return;
+    }
     const cost = num(node.cost ?? node.price);
     const count = num(node.count ?? node.physicalCount ?? node.quantity ?? node.amount ?? node.stock);
     if (cost != null && count != null) { add(String(node.provider_id ?? node.providerId ?? hint), cost, count); return; }

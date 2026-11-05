@@ -60,3 +60,24 @@ describe('pickCountryTiers (V2 lists every option, V3 only the cheapest)', () =>
   });
   it('returns [] when nothing has stock', () => { expect(pickCountryTiers([null, {}, 'NO_NUMBERS'], '1', 'wa')).toEqual([]); });
 });
+
+describe('parseTiers: real GrizzlySMS responses (captured 2026-11)', () => {
+  // getPricesV3 for service wa, country 62: providers grouped by price must equal the V2 option set
+  const v3c62 = { '62': { wa: { price: 0.89, count: 12703, providers: {
+    '11': { count: 20, price: [3], provider_id: 11 }, '161': { count: 84, price: [3], provider_id: 161 }, '196': { count: 5660, price: [0.89], provider_id: 196 },
+    '202': { count: 100, price: [1.89], provider_id: 202 }, '222': { count: 129, price: [3], provider_id: 222 }, '4': { count: 259, price: [5], provider_id: 4 } } } } };
+  const v2c62 = { '62': { wa: { '0.8900': 5660, '1.8900': 100, '3.0000': 84, '5.0000': 259 } } };
+  it('V3 providers are grouped by price into the same options V2 reports', () => {
+    expect(parseTiers(v3c62, '62', 'wa').map((t) => t.cost)).toEqual([0.89, 1.89, 3, 5]);
+    expect(parseTiers(v2c62, '62', 'wa').map((t) => t.cost)).toEqual([0.89, 1.89, 3, 5]);
+  });
+  it('does not use the V3 top-level summary (cheapest price + total count) as a single option', () => {
+    const t = parseTiers(v3c62, '62', 'wa');
+    expect(t).toHaveLength(4);
+    expect(t.find((x) => x.cost === 3)?.count).toBe(233);
+    expect(t.some((x) => x.count === 12703)).toBe(false);
+  });
+  it('V2 returning null (no country given) yields nothing, so V3 is the fallback', () => {
+    expect(pickCountryTiers([null, v3c62], '62', 'wa')).toHaveLength(4);
+  });
+});
