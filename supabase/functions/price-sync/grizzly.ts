@@ -52,7 +52,7 @@ export async function providerCtx(db: SupabaseClient, providerId: string): Promi
 
 /**
  * Every country that currently has numbers for one platform, with ALL its price options.
- * getPricesV2 lists every option ({"0.165": 76005, ...}); getPricesV3 only the cheapest. V2 wins, V3/v1 are fallbacks.
+ * V3 lists every country with its providers' prices; they are grouped into the same options V2 reports per country.
  * ok=false means the provider could not be reached (never treat that as "no stock").
  */
 export async function fetchServiceTiers(p: ProviderCtx, code: string): Promise<{ ok: boolean; byCountry: Map<string, Tier[]> }> {
@@ -62,14 +62,15 @@ export async function fetchServiceTiers(p: ProviderCtx, code: string): Promise<{
       return { ok: true, raw: raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {} };
     } catch { return { ok: false, raw: {} as Record<string, unknown> }; }
   };
-  const [v2, v3] = await Promise.all([call('getPricesV2'), call('getPricesV3')]);
-  const v1 = !Object.keys(v2.raw).length && !Object.keys(v3.raw).length ? await call('getPrices') : { ok: false, raw: {} as Record<string, unknown> };
+  // getPricesV2 returns null without a country, so the all-countries call is V3 (its providers are grouped by price).
+  const v3 = await call('getPricesV3');
+  const v1 = !Object.keys(v3.raw).length ? await call('getPrices') : { ok: false, raw: {} as Record<string, unknown> };
   const byCountry = new Map<string, Tier[]>();
-  for (const cid of new Set([...Object.keys(v2.raw), ...Object.keys(v3.raw), ...Object.keys(v1.raw)])) {
-    const t = pickCountryTiers([v2.raw, v3.raw, v1.raw], cid, code);
+  for (const cid of new Set([...Object.keys(v3.raw), ...Object.keys(v1.raw)])) {
+    const t = pickCountryTiers([v3.raw, v1.raw], cid, code);
     if (t.length) byCountry.set(cid, t);
   }
-  return { ok: v2.ok || v3.ok || v1.ok, byCountry };
+  return { ok: v3.ok || v1.ok, byCountry };
 }
 
 export interface Ctx { base: URL; key: string; providerId: string; svcCode: string; ctyCode: string; timeout: number; cancelDelay: number; serviceName: string; countryName: string }
