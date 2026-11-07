@@ -81,3 +81,20 @@ describe('parseTiers: real GrizzlySMS responses (captured 2026-11)', () => {
     expect(pickCountryTiers([null, v3c62], '62', 'wa')).toHaveLength(4);
   });
 });
+
+import { deriveTimes } from '../../supabase/functions/catalog-tiers/parse';
+
+describe('deriveTimes (activation times from the provider response)', () => {
+  const now = Date.UTC(2026, 10, 7, 12, 0, 0);
+  it('reads seconds-from-now, epoch and ISO values from clearly named keys', () => {
+    const t = deriveTimes({ activationEndTime: '2026-11-07T12:20:00Z', secondsToCancel: 90 }, now);
+    expect(t.expiresAt?.toISOString()).toBe('2026-11-07T12:20:00.000Z');
+    expect(t.cancelAt?.getTime()).toBe(now + 90_000);
+    expect(deriveTimes({ endTime: Math.floor(Date.UTC(2026, 10, 7, 12, 15, 0) / 1000) }, now).expiresAt?.toISOString()).toBe('2026-11-07T12:15:00.000Z');
+  });
+  it('ignores unknown keys and non-objects instead of guessing', () => {
+    expect(deriveTimes({ foo: 120, status: 'STATUS_WAIT_CODE' }, now)).toEqual({});
+    expect(deriveTimes('STATUS_WAIT_CODE', now)).toEqual({});
+    expect(deriveTimes(null, now)).toEqual({});
+  });
+});

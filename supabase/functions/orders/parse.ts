@@ -76,3 +76,35 @@ export function pickCountryTiers(sources: any[], country: string, service: strin
   }
   return [];
 }
+
+// ---- activation times (getStatusV2) --------------------------------------------------------------
+// The provider's official docs do not describe these fields, so the raw response is stored on the order
+// and times are only taken from clearly named keys. Unknown shape => nothing is derived (caller falls back).
+const EXPIRY_KEYS = ['activationendtime', 'activationend', 'endtime', 'expiresat', 'expirytime', 'expiretime', 'expires', 'expireat'];
+const CANCEL_KEYS = ['cancelavailableat', 'canceltime', 'cancelat', 'cancancelat', 'cancelafter', 'secondstocancel', 'canceldelay', 'cancelavailablein'];
+
+function toDate(v: unknown, now: number): Date | null {
+  if (typeof v === 'number' || (typeof v === 'string' && /^\d+(\.\d+)?$/.test(v))) {
+    const n = Number(v);
+    if (n < 100000) return new Date(now + n * 1000);        // seconds from now
+    return new Date(n > 1e12 ? n : n * 1000);                // epoch seconds / ms
+  }
+  if (typeof v === 'string') {
+    const t = Date.parse(v.includes('T') ? v : v.replace(' ', 'T') + 'Z');
+    return Number.isFinite(t) ? new Date(t) : null;
+  }
+  return null;
+}
+
+export function deriveTimes(meta: unknown, now = Date.now()): { expiresAt?: Date; cancelAt?: Date } {
+  const out: { expiresAt?: Date; cancelAt?: Date } = {};
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return out;
+  for (const [k, v] of Object.entries(meta as Record<string, unknown>)) {
+    const key = k.toLowerCase();
+    const d = toDate(v, now);
+    if (!d || d.getTime() < now - 86_400_000) continue;
+    if (!out.expiresAt && EXPIRY_KEYS.includes(key)) out.expiresAt = d;
+    if (!out.cancelAt && CANCEL_KEYS.includes(key)) out.cancelAt = d;
+  }
+  return out;
+}

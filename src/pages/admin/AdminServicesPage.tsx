@@ -227,6 +227,7 @@ function Manager({ id, onBack }: { id: string; onBack: () => void }) {
   const [cPicked, setCPicked] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [showGone, setShowGone] = useState(false);
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.rpc('admin_service_detail', { p_service: id });
@@ -266,11 +267,16 @@ function Manager({ id, onBack }: { id: string; onBack: () => void }) {
   if (err) return <p className="text-error-700">{err}</p>;
   if (!d) return <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary-600" /></div>;
   const existing = new Set(d.countries.map((c) => c.country_id));
+  // options/countries the provider no longer lists are hidden (they come back automatically if the provider re-adds them);
+  // options are shown in the provider's own order: highest price first
+  const view = d.countries
+    .map((c) => ({ ...c, tiers: (showGone ? c.tiers : c.tiers.filter((t) => t.in_stock)).slice().sort((a, b) => Number(b.cost) - Number(a.cost)) }))
+    .filter((c) => showGone || c.tiers.length > 0);
   return (
     <>
       <button className="mb-3 inline-flex items-center gap-1 text-sm text-primary-600 hover:underline" onClick={onBack}><ArrowLeft className="h-4 w-4" />All services</button>
       <h2 className="mb-1 text-xl font-bold text-neutral-900 dark:text-neutral-100">{d.service.name}</h2>
-      <p className="mb-4 text-sm text-neutral-500">{d.countries.length} countries · untick a country or a price option to hide it from customers. Sell prices follow provider cost automatically and never go below it.</p>
+      <p className="mb-4 text-sm text-neutral-500">{view.length} countries · untick a country or a price option to hide it from customers. Sell prices follow provider cost automatically and never go below it.</p>
 
       <div className="card mb-4 space-y-3 p-4">
         <div className="flex flex-wrap items-end gap-2">
@@ -286,8 +292,9 @@ function Manager({ id, onBack }: { id: string; onBack: () => void }) {
         {msg && <p className="text-sm text-neutral-700 dark:text-neutral-300">{msg}</p>}
       </div>
 
+      <label className="mb-3 flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400"><input type="checkbox" checked={showGone} onChange={(e) => setShowGone(e.target.checked)} />Also show countries and options the provider no longer lists</label>
       <div className="space-y-2">
-        {d.countries.map((c) => {
+        {view.map((c) => {
           const isOpen = open.has(c.country_id);
           const live = c.tiers.filter((t) => t.in_stock);
           return (

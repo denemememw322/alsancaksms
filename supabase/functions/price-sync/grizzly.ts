@@ -1,7 +1,7 @@
 // Shared GrizzlySMS helpers (copied into each function bundle). The API key never leaves the server.
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2';
-import { parseTiers, parseServices, pickCountryTiers, type Tier } from './parse.ts';
-export { parseTiers, parseServices, pickCountryTiers };
+import { parseTiers, parseServices, pickCountryTiers, deriveTimes, type Tier } from './parse.ts';
+export { parseTiers, parseServices, pickCountryTiers, deriveTimes };
 export type { Tier };
 
 export const CORS = {
@@ -118,5 +118,6 @@ export async function liveTiers(db: SupabaseClient, ctx: Ctx, serviceId: string,
     const g = groups.get(retail);
     groups.set(retail, g ? { retail, cost: Math.max(g.cost, cost), count: g.count + qty } : { retail, cost, count: qty });
   }
-  return [...groups.values()].sort((a, b) => a.retail - b.retail);
+  // same order as the provider's own site: highest price first
+  return [...groups.values()].sort((a, b) => b.retail - a.retail);
 }

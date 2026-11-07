@@ -10,7 +10,6 @@ import { SignUpPage } from '@/pages/auth/SignUpPage';
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage';
 import { AdminOverviewPage } from '@/pages/admin/AdminOverviewPage';
 import { AdminCategoriesPage } from '@/pages/admin/AdminCategoriesPage';
-import { AdminCountriesPage } from '@/pages/admin/AdminCountriesPage';
 import { AdminServicesPage } from '@/pages/admin/AdminServicesPage';
 import { AdminProvidersPage } from '@/pages/admin/AdminProvidersPage';
 import { AdminPricingRulesPage } from '@/pages/admin/AdminPricingRulesPage';
@@ -115,7 +114,6 @@ function AppRoutes() {
     }
     if (path === '/admin') return <AdminRoute><AdminOverviewPage /></AdminRoute>;
     if (path === '/admin/categories') return <AdminRoute><AdminCategoriesPage /></AdminRoute>;
-    if (path === '/admin/countries') return <AdminRoute><AdminCountriesPage /></AdminRoute>;
     if (path === '/admin/services') return <AdminRoute><AdminServicesPage /></AdminRoute>;
     if (path === '/admin/providers') return <AdminRoute><AdminProvidersPage /></AdminRoute>;
     if (path === '/admin/pricing-rules') return <AdminRoute><AdminPricingRulesPage /></AdminRoute>;

@@ -1,7 +1,7 @@
 import { useAuth } from '@/context/AuthContext';
 import { Link, useRouter } from '@/context/RouterContext';
 import { useI18n } from '@/i18n/I18nContext';
-import { Shield, LayoutGrid, Package, Globe, Layers, DollarSign, History, Server, ArrowLeft, Wallet, CreditCard, ShoppingBag, Users, Settings } from 'lucide-react';
+import { Shield, LayoutGrid, Package, Layers, DollarSign, History, Server, ArrowLeft, Wallet, CreditCard, ShoppingBag, Users, Settings } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 export function isAdmin(roles: string[]): boolean {
@@ -31,7 +31,6 @@ export function AdminLayout({ children, title }: { children: ReactNode; title: s
   const navItems = [
     { label: 'Overview', path: '/admin', icon: LayoutGrid },
     { label: t('admin.categories'), path: '/admin/categories', icon: Layers },
-    { label: t('admin.countries'), path: '/admin/countries', icon: Globe },
     { label: t('admin.services'), path: '/admin/services', icon: Package },
     { label: t('admin.providers'), path: '/admin/providers', icon: Server },
     { label: t('admin.pricing_rules'), path: '/admin/pricing-rules', icon: DollarSign },

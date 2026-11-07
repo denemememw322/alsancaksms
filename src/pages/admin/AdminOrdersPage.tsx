@@ -5,7 +5,7 @@ import { useI18n } from '@/i18n/I18nContext';
 import { AlertCircle } from 'lucide-react';
 
 interface Row { id: string; user_id: string; service_name: string; country_name: string; status: string; retail_price: number; provider_cost: number | null; currency: string; refunded_at: string | null; error_message: string | null; phone_number: string | null; created_at: string }
-const STATUSES = ['all', 'pending', 'active', 'received', 'completed', 'cancelled', 'failed', 'needs_review'];
+const STATUSES = ['all', 'searching', 'active', 'received', 'completed', 'cancelled', 'needs_review', 'no_number'];
 
 export function AdminOrdersPage() {
   const { formatCurrency, formatDate } = useI18n();
@@ -13,7 +13,7 @@ export function AdminOrdersPage() {
   const [status, setStatus] = useState('all');
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
-    let q = supabase.from('orders').select('id,user_id,service_name,country_name,status,retail_price,provider_cost,currency,refunded_at,error_message,phone_number,created_at').order('created_at', { ascending: false }).limit(200);
+    let q = supabase.from('admin_orders').select('id,user_id,service_name,country_name,status,retail_price,provider_cost,currency,refunded_at,error_message,phone_number,created_at').order('created_at', { ascending: false }).limit(200);
     if (status !== 'all') q = q.eq('status', status);
     q.then(({ data, error }) => { if (error) setErr(error.message); else { setErr(null); setRows((data ?? []) as Row[]); } });
   }, [status]);

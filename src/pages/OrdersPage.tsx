@@ -5,7 +5,7 @@ import { useRouter } from '@/context/RouterContext';
 import { Copy, Loader2, AlertCircle, CheckCircle2, XCircle, Clock, Phone, ArrowLeft } from 'lucide-react';
 
 interface Order {
-  id: string; service_name: string; country_name: string; status: 'pending' | 'active' | 'received' | 'completed' | 'cancelled' | 'failed' | 'needs_review';
+  id: string; service_name: string; country_name: string; status: 'pending' | 'searching' | 'active' | 'received' | 'completed' | 'cancelled' | 'failed' | 'needs_review' | 'no_number';
   retail_price: number; currency: string; phone_number: string | null; sms_code: string | null; refunded_at: string | null;
   error_message: string | null; expires_at: string | null; cancel_available_at: string | null; created_at: string;
 }
@@ -13,8 +13,11 @@ const COLS = 'id,service_name,country_name,status,retail_price,currency,phone_nu
 const LABEL: Record<Order['status'], { text: string; cls: string }> = {
   pending: { text: 'Processing', cls: 'badge-neutral' }, active: { text: 'Waiting for SMS', cls: 'badge-neutral' },
   received: { text: 'SMS received', cls: 'badge-success' }, completed: { text: 'Completed', cls: 'badge-success' },
-  cancelled: { text: 'Cancelled', cls: 'badge-neutral' }, failed: { text: 'Failed', cls: 'badge-neutral' }, needs_review: { text: 'Being verified', cls: 'badge-neutral' },
+  cancelled: { text: 'Cancelled', cls: 'badge-neutral' }, failed: { text: 'Cancelled', cls: 'badge-neutral' }, needs_review: { text: 'Being verified', cls: 'badge-neutral' },
+  searching: { text: 'Searching', cls: 'badge-neutral' }, no_number: { text: 'Cancelled', cls: 'badge-neutral' },
 };
+type Tab = 'completed' | 'active' | 'cancelled';
+const TAB_STATUSES: Record<Tab, Order['status'][]> = { completed: ['completed'], active: ['active', 'received', 'needs_review'], cancelled: ['cancelled'] };
 const OPEN = ['pending', 'active', 'received', 'needs_review'];
 
 export function OrdersPage() {
@@ -25,15 +28,26 @@ export function OrdersPage() {
 
 function OrderList({ open }: { open: (id: string) => void }) {
   const { formatCurrency, formatDate } = useI18n();
-  const [rows, setRows] = useState<Order[] | null>(null);
+  const [all, setAll] = useState<Order[] | null>(null);
+  const [tab, setTab] = useState<Tab>('completed');
   useEffect(() => {
-    supabase.from('orders').select(COLS).order('created_at', { ascending: false }).limit(100).then(({ data }) => setRows((data ?? []) as Order[]));
+    // searches that never produced a number are not orders and are never listed
+    supabase.from('orders').select(COLS).in('status', ['completed', 'active', 'received', 'needs_review', 'cancelled']).order('created_at', { ascending: false }).limit(300).then(({ data }) => setAll((data ?? []) as Order[]));
   }, []);
+  const rows = all ? all.filter((o) => TAB_STATUSES[tab].includes(o.status)) : null;
+  const count = (t: Tab) => (all ?? []).filter((o) => TAB_STATUSES[t].includes(o.status)).length;
   return (
     <>
       <h1 className="mb-4 text-2xl font-bold text-neutral-900 dark:text-neutral-100">My orders</h1>
+      <div className="mb-4 flex gap-1 border-b border-neutral-200 dark:border-neutral-800" role="tablist">
+        {([['completed', 'Completed'], ['active', 'In progress'], ['cancelled', 'Cancelled']] as Array<[Tab, string]>).map(([t, label]) => (
+          <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${tab === t ? 'border-primary-600 text-primary-600' : 'border-transparent text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200'}`}>
+            {label}{all && count(t) > 0 && <span className={`ml-1.5 rounded-full px-1.5 text-xs ${t === 'active' ? 'bg-primary-600 text-white' : 'bg-neutral-200 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300'}`}>{count(t)}</span>}
+          </button>
+        ))}
+      </div>
       {!rows && <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary-600" /></div>}
-      {rows?.length === 0 && <p className="py-10 text-center text-neutral-500">You have no orders yet.</p>}
+      {rows?.length === 0 && <p className="py-10 text-center text-neutral-500">{tab === 'completed' ? 'No completed orders yet.' : tab === 'active' ? 'Nothing in progress.' : 'No cancelled orders.'}</p>}
       <ul className="space-y-2">
         {rows?.map((o) => (
           <li key={o.id}><button className="card flex w-full items-center justify-between p-3 text-left hover:border-primary-500" onClick={() => open(o.id)}>
@@ -119,7 +133,7 @@ function OrderDetail({ id, back }: { id: string; back: () => void }) {
             <div className="flex items-center justify-between"><span className="font-mono text-2xl font-bold">{o.sms_code}</span><button className="btn-secondary btn-sm inline-flex items-center gap-1" onClick={() => navigator.clipboard.writeText(o.sms_code!)}><Copy className="h-4 w-4" />Copy</button></div></div>
         )}
         {o.status === 'needs_review' && <p className="mb-4 flex items-start gap-2 text-sm text-neutral-600 dark:text-neutral-400"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />We are confirming this order with the provider. Your balance is safe; if no number was issued it will be refunded.</p>}
-        {(o.status === 'cancelled' || o.status === 'failed') && <p className="mb-4 flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400"><XCircle className="h-4 w-4" />{o.refunded_at ? 'This order was refunded to your balance.' : 'This order was not charged.'}</p>}
+        {(o.status === 'cancelled' || o.status === 'failed' || o.status === 'no_number') && <p className="mb-4 flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400"><XCircle className="h-4 w-4" />{o.refunded_at ? 'This order was refunded to your balance.' : 'This order was not charged.'}</p>}
         {err && <p className="mb-3 text-sm text-error-700">{err}</p>}
         <div className="flex gap-2">
           {o.status === 'active' && !o.sms_code && <button className="btn-secondary btn-sm" disabled={busy || cancelIn > 0} onClick={() => act('cancel')}>{cancelIn > 0 ? `Cancel available in ${Math.floor(cancelIn / 60)}:${String(cancelIn % 60).padStart(2, '0')}` : 'Cancel & refund'}</button>}
